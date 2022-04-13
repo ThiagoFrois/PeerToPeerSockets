@@ -27,8 +27,11 @@ state = RELEASED
 group = '224.1.1.1'
 portGroup = 5004
 
-# Argumento de entrada IP
+# Argumento de entrada: IP
 host = sys.argv[1]
+
+#Argumento de entrada: Número total de processos na rede (contando com o próprio processo)
+numPeers = sys.argv[2]
 
 # Inicializa  e configura o socket para a comunicação multicast
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -48,13 +51,13 @@ def listen():
     while True:
         data  = sock.recv(1024)
         if data.decode().split()[0] != host: # Verifica se a mensagem que recebeu não é aquela que ele enviou
-        
+
             if data.decode().split()[1] == '1': # Verifica se é um mensagem de requisição do recurso
                 ms = "1"
                 # Verifica se não estão usando o recurso
                 # Se não: Responde a requisição
                 # Se sim: Adiciona seu endereço na fila de requisições
-                if state != HELD: 
+                if state != HELD and state != WANTED:
                     sock2.sendto(ms.encode(), (data.decode().split()[0], 5005))
                 else:
                     q.put(data.decode().split()[0])
@@ -73,14 +76,14 @@ def listen2():
         if data2.decode() == '1': # Verifica se houve resposta positiva da requisição enviada
             replies += 1
 
-            if replies == 2: # Verifica se todos os outros processos responderam positivamente a requisição
+            if replies == int(numPeers) - 1: # Verifica se todos os outros processos responderam positivamente a requisição
                 state = HELD
                 replies = 0
         # Verifica se houve uma mensagem para a liberação do acesso a seção crítica
-        # E por ser não ser o primeiro da fila a resposta é para voltar o processo para o estado inicial replies = 0 e state = released
-        elif data2.decode() == '0': 
-            state = RELEASED
-            replies = 0
+        # E por ser não ser o primeiro da fila mantém o estado WANTED
+        elif data2.decode() == '0':
+            #state = RELEASED
+            replies = WANTED
         # Verifica se houve uma mensagem para a liberação do acesso a seção crítica
         # E por ser o primeiro da fila a resposta é para zera o número de requisição recebidas e alterar o estado para HELD
         elif data2.decode() == '2':
@@ -92,13 +95,13 @@ listener2 = threading.Thread(target=listen2, daemon=True)
 listener2.start()
 
 # Menu de opções
-while True:   
+while True:
     print("\nMenu:\nSair ----------- 0\nRequisitar ----- 1\nLiberar -------- 2\nAtualiza Tela -- 3\n")
     num = input("Sua escolha: ")
     os.system('clear')
     print("\n ------------------- O estado atual é {} ------------------".format(state))
     # Verifica se a opção escolhida é a requisição do recurso e o processo tem o estado REALEASED
-    if num == '1' and state != HELD and state != WANTED: 
+    if num == '1' and state != HELD and state != WANTED:
         print("Requisitando o recurso...\n")
         m = host + ' ' + num # Mensagem composta: <IP> <Tipo mensagem>
         state = WANTED # O estado vira WANTED
